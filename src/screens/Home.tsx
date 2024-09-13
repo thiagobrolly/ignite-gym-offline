@@ -14,6 +14,8 @@ import { AppNavigatorRoutesProps } from '@routes/app.routes';
 import { Loading } from '@components/Loading';
 import { useQuery, useRealm } from '@realm/react';
 import { UpdateMode } from 'realm';
+import { GroupSchema } from '@libs/realm/schemas/GroupSchema';
+import { ExerciseSchema } from '@libs/realm/schemas/ExerciseSchema';
 
 export function Home() {
   const [isLoading, setIsLoading] = useState(true);
@@ -23,8 +25,8 @@ export function Home() {
   const navigation = useNavigation<AppNavigatorRoutesProps>();
 
   const realm = useRealm();
-  const savedGroups = useQuery('Group'); // Query para buscar os grupos salvos no Realm
-  const savedExercises = useQuery('Exercise'); // Query para buscar os exercícios salvos no Realm
+  const savedGroups = useQuery<GroupSchema>('Group'); // Query para buscar os grupos salvos no Realm
+  const savedExercises = useQuery<ExerciseSchema>('Exercise'); // Query para buscar os exercícios salvos no Realm
 
   const [groups, setGroups] = useState<string[]>(
     savedGroups.map((group) => group.name),
@@ -43,7 +45,7 @@ export function Home() {
       // Salvar os grupos no Realm
       realm.write(() => {
         response.data.forEach((groupName: string) => {
-          realm.create('Group', { name: groupName });
+          realm.create('Group', { name: groupName }, UpdateMode.Modified);
         });
       });
     } catch (error) {
@@ -70,51 +72,52 @@ export function Home() {
   async function fetchExercisesByGroup() {
     try {
       setIsLoading(true);
-      console.log(`Fetching exercises for group: ${groupSelected}`);
-      
       const response = await api.get(`/exercises/bygroup/${groupSelected}`);
-      console.log('Response data:', response.data);
-  
-      if (response.data && Array.isArray(response.data)) {
 
-        // Verifique a estrutura dos dados retornados
-    response.data.forEach((exercise: any) => {
-      // Se algum campo esperado como string for um número, converta-o
-      if (typeof exercise.id !== 'string') {
-        exercise.id = String(exercise.id);
-      }
-      if (typeof exercise.name !== 'string') {
-        exercise.name = String(exercise.name);
-      }
-      if (typeof exercise.groupId !== 'string') {
-        exercise.groupId = String(exercise.groupId);
-      }
-    });
-        setExercises(response.data);
-  
-        // Salvar os dados no Realm
-        realm.write(() => {
-          response.data.forEach((exercise: ExerciseDTO) => {
-            realm.create(
-              'Exercise',
-              { ...exercise, groupId: groupSelected },
-              UpdateMode.Modified
-            );
-          });
+      // Adapte a resposta da API para o formato esperado
+      const adaptedData = response.data.map((exercise: ExerciseDTO) => ({
+        demo: String(exercise.demo),
+        group: String(exercise.group),
+        id: Number(exercise.id),
+        name: String(exercise.name),
+        repetitions: Number(exercise.repetitions),
+        series: Number(exercise.series),
+        thumb: String(exercise.thumb),
+        updated_at: String(exercise.updated_at),
+      }));
+
+      setExercises(adaptedData);
+
+      // Salvar os dados no Realm
+      realm.write(() => {
+        adaptedData.forEach((exercise: any) => {
+          realm.create('Exercise', exercise, UpdateMode.Modified);
         });
-  
-        console.log('Exercícios salvos com sucesso:', response.data);
-      } else {
-        throw new Error('Resposta da API não está no formato esperado.');
-      }
+      });
+
+      console.log('Exercícios salvos com sucesso:', adaptedData);
     } catch (error) {
       console.error('Error fetching exercises:', error);
+
       const savedGroupExercises = savedExercises.filtered(
-        `groupId = "${groupSelected}"`
+        `group = "${groupSelected}"`,
       );
-  
+
       if (savedGroupExercises.length > 0) {
-        setExercises(savedGroupExercises);
+        const adaptedDataOffline = savedGroupExercises.map(
+          (exercise: ExerciseSchema) => ({
+            id: String(exercise.id),
+            demo: String(exercise.demo),
+            group: String(exercise.group),
+            name: String(exercise.name),
+            repetitions: String(exercise.repetitions),
+            series: Number(exercise.series),
+            thumb: String(exercise.thumb),
+            updated_at: String(exercise.updated_at),
+          }),
+        );
+
+        setExercises(adaptedDataOffline);
         toast.show({
           title: 'Mostrando exercícios salvos offline.',
           placement: 'top',
@@ -135,7 +138,6 @@ export function Home() {
       setIsLoading(false);
     }
   }
-  
 
   console.log('Todos os exercícios salvos no Realm:', savedExercises); // Verifique o que está sendo salvo
 
