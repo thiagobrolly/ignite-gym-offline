@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { FlatList, Heading, HStack, Text, useToast, VStack } from 'native-base';
+import NetInfo from '@react-native-community/netinfo';
 
 import { api } from '@services/api';
 import { AppError } from '@utils/AppError';
@@ -39,101 +40,212 @@ export function Home() {
 
   async function fetchGroups() {
     try {
-      const response = await api.get('/groups');
-      setGroups(response.data);
-
-      // Salvar os grupos no Realm
-      realm.write(() => {
-        response.data.forEach((groupName: string) => {
-          realm.create('Group', { name: groupName }, UpdateMode.Modified);
-        });
-      });
-    } catch (error) {
-      if (savedGroups.length > 0) {
-        toast.show({
-          title: 'Mostrando grupos salvos offline.',
-          placement: 'top',
-          bgColor: 'yellow.500',
+      const netInfo = await NetInfo.fetch(); // Verifica o estado da conexão
+  
+      if (netInfo.isConnected) {
+        const response = await api.get('/groups');
+        setGroups(response.data);
+  
+        // Salvar os grupos no Realm
+        realm.write(() => {
+          response.data.forEach((groupName: string) => {
+            realm.create('Group', { name: groupName }, UpdateMode.Modified);
+          });
         });
       } else {
-        const isAppError = error instanceof AppError;
-        const title = isAppError
-          ? error.message
-          : 'Não foi possível carregar os grupos musculares';
-        toast.show({
-          title,
-          placement: 'top',
-          bgColor: 'red.500',
-        });
+        if (savedGroups.length > 0) {
+          // Mostrar dados offline sem cair no catch
+          setGroups(savedGroups.map((group) => group.name));
+          toast.show({
+            title: 'Mostrando grupos salvos offline.',
+            placement: 'top',
+            bgColor: 'yellow.500',
+          });
+        } else {
+          throw new Error('Sem conexão e sem dados salvos');
+        }
       }
+    } catch (error) {
+      const isAppError = error instanceof AppError;
+      const title = isAppError
+        ? error.message
+        : 'Não foi possível carregar os grupos musculares';
+      toast.show({
+        title,
+        placement: 'top',
+        bgColor: 'red.500',
+      });
     }
   }
 
+  // async function fetchGroups() {
+  //   try {
+  //     const response = await api.get('/groups');
+  //     setGroups(response.data);
+
+  //     // Salvar os grupos no Realm
+  //     realm.write(() => {
+  //       response.data.forEach((groupName: string) => {
+  //         realm.create('Group', { name: groupName }, UpdateMode.Modified);
+  //       });
+  //     });
+  //   } catch (error) {
+  //     if (savedGroups.length > 0) {
+  //       toast.show({
+  //         title: 'Mostrando grupos salvos offline.',
+  //         placement: 'top',
+  //         bgColor: 'yellow.500',
+  //       });
+  //     } else {
+  //       const isAppError = error instanceof AppError;
+  //       const title = isAppError
+  //         ? error.message
+  //         : 'Não foi possível carregar os grupos musculares';
+  //       toast.show({
+  //         title,
+  //         placement: 'top',
+  //         bgColor: 'red.500',
+  //       });
+  //     }
+  //   }
+  // }
+
+  // async function fetchExercisesByGroup() {
+  //   try {
+  //     setIsLoading(true);
+  //     const response = await api.get(`/exercises/bygroup/${groupSelected}`);
+
+  //     // Adapte a resposta da API para o formato esperado
+  //     const adaptedData = response.data.map((exercise: ExerciseDTO) => ({
+  //       demo: String(exercise.demo),
+  //       group: String(exercise.group),
+  //       id: Number(exercise.id),
+  //       name: String(exercise.name),
+  //       repetitions: Number(exercise.repetitions),
+  //       series: Number(exercise.series),
+  //       thumb: String(exercise.thumb),
+  //       updated_at: String(exercise.updated_at),
+  //     }));
+
+  //     setExercises(adaptedData);
+
+  //     // Salvar os dados no Realm
+  //     realm.write(() => {
+  //       adaptedData.forEach((exercise: any) => {
+  //         realm.create('Exercise', exercise, UpdateMode.Modified);
+  //       });
+  //     });
+
+  //     console.log('Exercícios salvos com sucesso:', adaptedData);
+  //   } catch (error) {
+  //     console.error('Error fetching exercises:', error);
+
+  //     const savedGroupExercises = savedExercises.filtered(
+  //       `group = "${groupSelected}"`,
+  //     );
+
+  //     if (savedGroupExercises.length > 0) {
+  //       const adaptedDataOffline = savedGroupExercises.map(
+  //         (exercise: ExerciseSchema) => ({
+  //           id: String(exercise.id),
+  //           demo: String(exercise.demo),
+  //           group: String(exercise.group),
+  //           name: String(exercise.name),
+  //           repetitions: String(exercise.repetitions),
+  //           series: Number(exercise.series),
+  //           thumb: String(exercise.thumb),
+  //           updated_at: String(exercise.updated_at),
+  //         }),
+  //       );
+
+  //       setExercises(adaptedDataOffline);
+  //       toast.show({
+  //         title: 'Mostrando exercícios salvos offline.',
+  //         placement: 'top',
+  //         bgColor: 'yellow.500',
+  //       });
+  //     } else {
+  //       const isAppError = error instanceof AppError;
+  //       const title = isAppError
+  //         ? error.message
+  //         : 'Não foi possível carregar os exercícios';
+  //       toast.show({
+  //         title,
+  //         placement: 'top',
+  //         bgColor: 'red.500',
+  //       });
+  //     }
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // }
+
   async function fetchExercisesByGroup() {
     try {
+      const netInfo = await NetInfo.fetch(); // Verifica a conexão
       setIsLoading(true);
-      const response = await api.get(`/exercises/bygroup/${groupSelected}`);
-
-      // Adapte a resposta da API para o formato esperado
-      const adaptedData = response.data.map((exercise: ExerciseDTO) => ({
-        demo: String(exercise.demo),
-        group: String(exercise.group),
-        id: Number(exercise.id),
-        name: String(exercise.name),
-        repetitions: Number(exercise.repetitions),
-        series: Number(exercise.series),
-        thumb: String(exercise.thumb),
-        updated_at: String(exercise.updated_at),
-      }));
-
-      setExercises(adaptedData);
-
-      // Salvar os dados no Realm
-      realm.write(() => {
-        adaptedData.forEach((exercise: any) => {
-          realm.create('Exercise', exercise, UpdateMode.Modified);
-        });
-      });
-
-      console.log('Exercícios salvos com sucesso:', adaptedData);
-    } catch (error) {
-      console.error('Error fetching exercises:', error);
-
-      const savedGroupExercises = savedExercises.filtered(
-        `group = "${groupSelected}"`,
-      );
-
-      if (savedGroupExercises.length > 0) {
-        const adaptedDataOffline = savedGroupExercises.map(
-          (exercise: ExerciseSchema) => ({
-            id: String(exercise.id),
-            demo: String(exercise.demo),
-            group: String(exercise.group),
-            name: String(exercise.name),
-            repetitions: String(exercise.repetitions),
-            series: Number(exercise.series),
-            thumb: String(exercise.thumb),
-            updated_at: String(exercise.updated_at),
-          }),
-        );
-
-        setExercises(adaptedDataOffline);
-        toast.show({
-          title: 'Mostrando exercícios salvos offline.',
-          placement: 'top',
-          bgColor: 'yellow.500',
+  
+      if (netInfo.isConnected) {
+        const response = await api.get(`/exercises/bygroup/${groupSelected}`);
+  
+        const adaptedData = response.data.map((exercise: ExerciseDTO) => ({
+          demo: String(exercise.demo),
+          group: String(exercise.group),
+          id: Number(exercise.id),
+          name: String(exercise.name),
+          repetitions: Number(exercise.repetitions),
+          series: Number(exercise.series),
+          thumb: String(exercise.thumb),
+          updated_at: String(exercise.updated_at),
+        }));
+  
+        setExercises(adaptedData);
+  
+        // Salvar os dados no Realm
+        realm.write(() => {
+          adaptedData.forEach((exercise: any) => {
+            realm.create('Exercise', exercise, UpdateMode.Modified);
+          });
         });
       } else {
-        const isAppError = error instanceof AppError;
-        const title = isAppError
-          ? error.message
-          : 'Não foi possível carregar os exercícios';
-        toast.show({
-          title,
-          placement: 'top',
-          bgColor: 'red.500',
-        });
+        const savedGroupExercises = savedExercises.filtered(
+          `group = "${groupSelected}"`,
+        );
+  
+        if (savedGroupExercises.length > 0) {
+          const adaptedDataOffline = savedGroupExercises.map(
+            (exercise: ExerciseSchema) => ({
+              id: String(exercise.id),
+              demo: String(exercise.demo),
+              group: String(exercise.group),
+              name: String(exercise.name),
+              repetitions: String(exercise.repetitions),
+              series: Number(exercise.series),
+              thumb: String(exercise.thumb),
+              updated_at: String(exercise.updated_at),
+            }),
+          );
+  
+          setExercises(adaptedDataOffline);
+          toast.show({
+            title: 'Mostrando exercícios salvos offline.',
+            placement: 'top',
+            bgColor: 'yellow.500',
+          });
+        } else {
+          throw new Error('Sem conexão e sem dados salvos');
+        }
       }
+    } catch (error) {
+      const isAppError = error instanceof AppError;
+      const title = isAppError
+        ? error.message
+        : 'Não foi possível carregar os exercícios';
+      toast.show({
+        title,
+        placement: 'top',
+        bgColor: 'red.500',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -172,7 +284,7 @@ export function Home() {
         _contentContainerStyle={{
           px: 8,
         }}
-        my={10}
+        my={15}
         maxH={10}
       />
 
