@@ -17,10 +17,15 @@ module.exports = function(api) {
             '@services': './src/services',
             '@hooks': './src/hooks',
             '@contexts': './src/contexts',
-            '@routes': './src/routes'
+            '@routes': './src/routes',
+            '@libs': './src/libs'
           }
         },
       ],
+      ['module:react-native-dotenv', {
+        "moduleName": "@env",
+        "allowUndefined": false,
+      }]
     ],
   };
 };
