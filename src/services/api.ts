@@ -1,5 +1,7 @@
 import axios, { AxiosError, AxiosInstance } from "axios";
 
+import { API_URL } from '@env';
+
 import { AppError } from "@utils/AppError";
 import { storageAuthTokenGet, storageAuthTokenSave } from "@storage/storageAuthToken";
 
@@ -15,7 +17,7 @@ type APIInstanceProps = AxiosInstance & {
 }
 
 const api = axios.create({
-  baseURL: 'http://192.168.100.243:3333',
+  baseURL: `${API_URL}`,
 }) as APIInstanceProps;
 
 let failedQueued: Array<PromiseType> = [];
